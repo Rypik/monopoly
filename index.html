@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monopoly online</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{--bg:#0f2a33;--pn:#17404c;--ac:#f2b134;--tx:#eef4f5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:"Trebuchet MS",system-ui,sans-serif}
+button,input,select{font:inherit;padding:8px 12px;border-radius:8px;border:0}
+button{background:var(--ac);color:#1b1b1b;font-weight:700;cursor:pointer}
+button:disabled{opacity:.35;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid #fff}
+#app{display:flex;gap:14px;padding:10px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
+#board{container-type:inline-size;width:min(100%,calc(100vh - 20px),880px);aspect-ratio:1;display:grid;grid-template:repeat(11,1fr)/repeat(11,1fr);background:#cfe8d5;border:2px solid #000}
+#cells{display:contents}
+.c{position:relative;background:#f6f8f8;color:#222;border:1px solid #000;overflow:hidden;text-align:center;font-size:1.15cqw;line-height:1.2}
+.c i{display:block;height:18%}
+.c b{display:block;padding:2% 3% 0}
+.c s{display:block;text-decoration:none;color:#555;font-size:.9em}
+.c u{position:absolute;left:0;right:0;bottom:0;height:46%;background:#f6f8f8;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:2px;text-decoration:none}
+.c em{width:2.2cqw;height:2.2cqw;border-radius:50%;border:2px solid #000}
+#mid{grid-area:2/2/11/11;color:#222;display:flex;flex-direction:column;align-items:center;padding:1.5cqw;gap:1cqw;min-height:0}
+#mid h1{margin:0;font-size:5cqw;color:#c62828;letter-spacing:.3cqw}
+#tt{font-weight:700;font-size:2cqw}
+#dice{font-family:"Segoe UI Symbol",sans-serif;font-size:9cqw;line-height:1}
+#btns{display:flex;gap:.8cqw;flex-wrap:wrap;justify-content:center}
+#btns button{font-size:1.7cqw;padding:.8cqw 1.4cqw}
+#lg{flex:1;overflow:auto;width:100%;font-size:1.5cqw;background:#ffffffaa;border-radius:8px;padding:.8cqw}
+#side{width:290px;display:flex;flex-direction:column;gap:10px}
+.pb{background:var(--pn);border:4px solid;border-radius:10px;padding:8px 10px;font-size:14px}
+.pb.on{background:#245a69}
+.pb span{float:right;font-weight:700}
+#deck{position:relative;width:150px;height:200px;margin:6px auto 14px;perspective:900px}
+#deck:before{content:"";position:absolute;inset:0;border-radius:10px;background:#0d47a1;transform:translate(8px,8px)}
+#card{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .7s}
+#card.up{transform:rotateY(180deg)}
+#card>div{position:absolute;inset:0;backface-visibility:hidden;border-radius:10px;border:3px solid #0d47a1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px}
+.bk{background:#1976d2;font-size:70px;font-weight:700}
+.bk small{font-size:15px}
+.fr{background:#fff;color:#222;transform:rotateY(180deg);font-size:14px}
+.fr h3{margin:0 0 8px;background:#ff9800;color:#fff;width:calc(100% + 20px);padding:6px;border-radius:7px 7px 0 0;margin-top:-10px}
+#lob{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9}
+.bx{background:var(--pn);padding:26px;border-radius:14px;width:min(92vw,380px);display:flex;flex-direction:column;gap:10px}
+.bx h1{margin:0}
+.bx div{display:flex;gap:8px}
+.bx input{flex:1;min-width:0}
+#m1 ul{padding-left:18px;margin:0}
+[hidden]{display:none!important}
+@media(prefers-reduced-motion:reduce){#card{transition:none}}
+</style>
+</head>
+<body>
+<div id="lob"><div class="bx">
+ <h1>Monopoly online</h1>
+ <input id="nm" placeholder="Tvoje jméno" maxlength="12">
+ <div id="m0" style="flex-direction:column">
+  <div><select id="cnt"><option>2</option><option>3</option><option>4</option></select><button onclick="local()" style="flex:1">Hrát na jednom počítači</button></div>
+  <button onclick="host()">Založit online hru</button>
+  <div><input id="cd" placeholder="Kód hry" maxlength="4"><button onclick="join()">Připojit se</button></div>
+ </div>
+ <div id="m1" hidden style="flex-direction:column">
+  <p>Kód hry: <strong id="code" style="font-size:28px;letter-spacing:4px"></strong></p>
+  <ul id="ls"></ul>
+  <button id="go" onclick="startHost()">Spustit hru</button>
+ </div>
+ <p id="ms" style="margin:0;min-height:1.2em"></p>
+</div></div>
+
+<div id="app">
+ <div id="board"><div id="cells"></div>
+  <div id="mid"><h1>MONOPOLY</h1><div id="tt"></div><div id="dice">? ?</div>
+   <div id="btns"><button id="bR" onclick="act('roll')">Hodit kostkami</button><button id="bJ" onclick="act('jail')">Vězení</button><button id="bB" onclick="act('buy')">Koupit pole</button><button id="bE" onclick="act('end')">Konec tahu</button></div>
+   <div id="lg"></div></div></div>
+ <div id="side"><div id="pl"></div>
+  <h3 style="margin:0;text-align:center">Karty Náhoda</h3>
+  <div id="deck"><div id="card"><div class="bk">?<small>NÁHODA</small></div><div class="fr"><h3>NÁHODA</h3><span id="ct"></span></div></div></div>
+ </div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const N=40,BONUS=500,FINE=100,TAX=200,STEP=.1,TR=[5,15,35];
+const COL=['#e5484d','#3b82f6','#2fa866','#f59e0b'],PN=['Červený','Modrý','Zelený','Oranžový'];
+const PAL=['#8d6e63','#4fc3f7','#ba68c8','#ffb74d','#e57373','#fff176','#81c784','#5c6bc0','#26a69a','#f06292'];
+const SP={S:'#66bb6a',J:'#ffa726',P:'#90caf9',G:'#ef5350',T:'#b0bec5',C:'#ff9800'};
+const NM="START,Hradní,Mlýnská,Ulice 3,Daň,Nádraží,Polní,NÁHODA,Zahradní,Školní,VĚZENÍ,Nám. Míru,Ulice 12,Rybník,Brněnská,Letiště,Pražská,Ulice 17,Novákova,Dlouhá,PARKOVIŠTĚ,Krátká,NÁHODA,Široká,Ulice 24,Poplatek,Ulice 26,Ulice 27,Vodní,Ulice 29,DO VĚZENÍ,Horní,Dolní,Ulice 33,Ulice 34,Metro,NÁHODA,Luxusní,Daň z luxusu,Zlatá".split(',');
+const TY={0:'S',10:'J',20:'P',30:'G',4:'T',25:'T',38:'T',7:'C',22:'C',36:'C'};
+const F=NM.map((n,i)=>({n,t:TY[i]||'H',bp:600+(i/10|0)*200+i%10*20,g:-1}));
+let k=0;F.forEach(f=>{if(f.t=='H'){f.g=k/3|0;k++}});
+const CARDS=[
+['Postup na START. Získáš 500 Kč.','m',0],
+['Postup na pole Ulice 24. Projdeš-li STARTEM, získáš 500 Kč.','m',24],
+['Postup na pole Nám. Míru. Projdeš-li STARTEM, získáš 500 Kč.','m',11],
+['Postup na nejbližší dopravní pole (Nádraží, Letiště, Metro). Má-li majitele, platíš dvojnásobný nájem.','n'],
+['Postup na nejbližší dopravní pole (Nádraží, Letiště, Metro). Má-li majitele, platíš dvojnásobný nájem.','n'],
+['Banka ti vyplácí dividendu 100 Kč.','$',100],
+['Vyjdi z vězení zdarma. Kartu si ponecháš, dokud ji nepoužiješ.','f'],
+['Vrať se o 3 pole zpět.','b'],
+['Jdi rovnou do vězení. Neprocházíš STARTEM.','j'],
+['Generální oprava: zaplať 40 Kč za každou svou nemovitost.','r',40],
+['Pokuta za rychlou jízdu: zaplať 30 Kč.','$',-30],
+['Svez se na Nádraží. Projdeš-li STARTEM, získáš 500 Kč.','m',5],
+['Projdi se po Zlaté ulici.','m',39],
+['Byl jsi zvolen předsedou. Zaplať každému hráči 100 Kč.','e',100],
+['Tvůj stavební úvěr dozrál. Získáš 300 Kč.','$',300],
+['Vyhrál jsi křížovku. Získáš 200 Kč.','$',200]];
+
+let S=null,deck=[],me=null,mode='',peer=null,conns=[],L=[],hconn=null,started=0;
+const price=f=>Math.round(f.bp*S.infl/10)*10;
+const pos=i=>i<=10?[10,10-i]:i<20?[20-i,0]:i<=30?[0,i-20]:[i-30,10];
+function rentOf(i){const o=S.o[i];if(o<0)return 0;const own=F.filter((x,j)=>x.g==F[i].g&&S.o[j]==o).length;return price(F[i])/10*[0,1,2,4][own]}
+
+/* ---------- herní logika (běží jen u hostitele / lokálně) ---------- */
+function init(names){
+ S={p:names.map((n,i)=>({i,n,m:1500,pos:0,jl:0,jt:0,jc:0,bk:0})),o:Array(N).fill(-1),infl:1,cur:0,rolled:0,extra:0,buy:0,over:-1,d:[0,0],card:null,up:0,log:['Hra začala.']};
+ deck=[...Array(CARDS.length).keys()].sort(()=>Math.random()-.5);
+}
+const log=t=>{S.log.unshift(t);S.log.length=Math.min(S.log.length,40)};
+function pay(p,to,a){
+ if(p.m>=a){p.m-=a;if(to)to.m+=a;return}
+ log(p.n+' nemá dost peněz - BANKROT!');if(to)to.m+=p.m;
+ p.m=0;p.bk=1;S.extra=0;S.buy=0;S.o=S.o.map(x=>x==p.i?-1:x);
+}
+function moveTo(p,t,fw=1){
+ const old=p.pos;p.pos=t;
+ if(fw&&t<=old){p.m+=BONUS;S.infl+=STEP;log(p.n+' prošel STARTEM (+'+BONUS+'). Ceny vzrostly o '+STEP*100+' %.')}
+}
+function jail(p){p.pos=10;p.jl=1;p.jt=0;S.extra=0;S.buy=0;log(p.n+' jde do VĚZENÍ!')}
+function land(p,dbl){
+ const f=F[p.pos];log(p.n+' stojí na poli '+f.n+'.');
+ if(f.t=='G')jail(p);
+ else if(f.t=='T'){log(p.n+' platí daň '+TAX+'.');pay(p,null,TAX)}
+ else if(f.t=='C')draw(p);
+ else if(f.t=='H'){
+  const o=S.o[p.pos];
+  if(o<0)S.buy=p.m>=price(f);
+  else if(o!=p.i){const r=rentOf(p.pos)*(dbl?2:1);log('Pole patří '+S.p[o].n+', nájem '+r+'.');pay(p,S.p[o],r)}
+ }
+}
+function draw(p){
+ const id=deck.shift();if(id!=6)deck.push(id);
+ const [t,kd,v]=CARDS[id];S.card={id,t};S.up=1;log(p.n+' táhne kartu: '+t);
+ if(kd=='m'){moveTo(p,v);land(p)}
+ else if(kd=='n'){const to=TR.map(x=>[(x-p.pos+N)%N||N,x]).sort((a,b)=>a[0]-b[0])[0][1];moveTo(p,to);land(p,1)}
+ else if(kd=='b'){moveTo(p,(p.pos+N-3)%N,0);land(p)}
+ else if(kd=='$'){v>=0?p.m+=v:pay(p,null,-v)}
+ else if(kd=='f')p.jc++;
+ else if(kd=='j')jail(p);
+ else if(kd=='r')pay(p,null,S.o.filter(x=>x==p.i).length*v);
+ else if(kd=='e'){for(const q of S.p){if(q!=p&&!q.bk){pay(p,q,v);if(p.bk)break}}}
+}
+function apply(a){
+ if(!S||S.over>=0||a.s!==S.cur)return;
+ const p=S.p[S.cur];
+ if(a.t=='roll'&&!S.rolled){
+  const d1=1+Math.random()*6|0,d2=1+Math.random()*6|0;
+  S.d=[d1,d2];S.rolled=1;S.extra=0;S.buy=0;log(p.n+' hodil '+d1+' + '+d2+'.');
+  const go=()=>{moveTo(p,(p.pos+d1+d2)%N);land(p)};
+  if(p.jl){
+   if(d1==d2){p.jl=0;p.jt=0;log('Dvojice - na svobodě.');go()}
+   else{p.jt++;log('Zůstává ve vězení ('+p.jt+'/3).');
+    if(p.jt>=3){pay(p,null,FINE);if(!p.bk){p.jl=0;p.jt=0;go()}}}
+  }else{go();if(d1==6&&d2==6&&!p.jl&&!p.bk){S.extra=1;log('Dvojitá šestka! Hraje znovu.')}}
+ }else if(a.t=='buy'&&S.buy){
+  const f=F[p.pos];
+  if(S.o[p.pos]<0&&p.m>=price(f)){p.m-=price(f);S.o[p.pos]=p.i;S.buy=0;log(p.n+' koupil '+f.n+'.')}
+ }else if(a.t=='jail'&&p.jl&&!S.rolled){
+  if(p.jc>0){p.jc--;deck.push(6);p.jl=0;p.jt=0;log(p.n+' použil kartu "Vyjdi z vězení".')}
+  else if(p.m>=FINE){p.m-=FINE;p.jl=0;p.jt=0;log(p.n+' zaplatil pokutu '+FINE+'.')}
+ }else if(a.t=='end'&&S.rolled){
+  if(S.extra&&!p.bk)S.extra=0;
+  else do{S.cur=(S.cur+1)%S.p.length}while(S.p[S.cur].bk);
+  S.rolled=0;S.buy=0;S.up=0;
+ }
+ const al=S.p.filter(x=>!x.bk);
+ if(al.length==1&&S.over<0){S.over=al[0].i;log('*** Vítězem je '+al[0].n+'! ***')}
+ sync();
+}
+function act(t){
+ const a={t,s:mode=='local'?S.cur:me};
+ if(mode=='client')hconn.send({t:'act',a});else apply(a);
+}
+function sync(){
+ render();
+ if(mode=='host')conns.forEach(c=>c&&c.open&&c.send({t:'state',s:S}));
+}
+
+/* ---------- vykreslení ---------- */
+function render(){
+ const p=S.p;
+ $('#cells').innerHTML=F.map((f,i)=>{
+  const [r,c]=pos(i),o=S.o[i],here=p.filter(q=>!q.bk&&q.pos==i);
+  const info=f.t=='H'?(o>=0?p[o].n+'<br>nájem '+rentOf(i):price(f)+' Kč<br>nájem '+price(f)/10):{S:'+'+BONUS,T:TAX+' Kč',J:'návštěva',P:'odpočinek',G:'jdi do vězení',C:'?'}[f.t];
+  return `<div class="c" style="grid-area:${r+1}/${c+1};${o>=0?'border:3px solid '+COL[o]:''}"><i style="background:${f.t=='H'?PAL[f.g]:SP[f.t]}"></i><b>${f.n}</b><s>${info}</s>${here.length?'<u>'+here.map(q=>`<em style="background:${COL[q.i]}"></em>`).join('')+'</u>':''}</div>`;
+ }).join('');
+ $('#pl').innerHTML=p.map((q,i)=>{
+  const f=F[q.pos],o=S.o[q.pos];let d='';
+  if(!q.bk){
+   d=`<div>Stojí na: <b>${f.n}</b></div>`;
+   if(f.t=='H')d+=`<div>Cena: ${price(f)} Kč</div><div>Nájem: ${o>=0?rentOf(q.pos):price(f)/10} Kč${o<0?' (základní)':''}</div><div>Majitel: ${o>=0?p[o].n:'nikdo'}</div>`;
+   else if(f.t=='T')d+=`<div>Daň: ${TAX} Kč</div>`;
+   if(q.jl)d+=`<div>Ve vězení (${q.jt}/3)</div>`;
+   if(q.jc)d+=`<div>Karta „Vyjdi z vězení“ ×${q.jc}</div>`;
+  }
+  return `<div class="pb${i==S.cur&&S.over<0?' on':''}" style="border-color:${COL[i]};margin-bottom:8px;${q.bk?'opacity:.5':''}"><b>${q.n}${i==me&&mode!='local'?' (ty)':''}</b><span>${q.bk?'BANKROT':q.m+' Kč'}</span>${d}</div>`;
+ }).join('');
+ const cp=p[S.cur],mine=mode=='local'||S.cur==me,ok=mine&&S.over<0;
+ $('#tt').textContent=S.over>=0?'Vítěz: '+p[S.over].n:'Na tahu: '+cp.n;
+ $('#dice').textContent=S.d[0]?String.fromCodePoint(0x2680+S.d[0]-1)+' '+String.fromCodePoint(0x2680+S.d[1]-1):'? ?';
+ $('#bR').disabled=!(ok&&!S.rolled);
+ $('#bJ').disabled=!(ok&&!S.rolled&&cp.jl&&(cp.jc||cp.m>=FINE));
+ $('#bJ').textContent=cp.jc?'Použít kartu z vězení':'Pokuta '+FINE+' (vězení)';
+ $('#bB').disabled=!(ok&&S.buy);
+ $('#bE').disabled=!(ok&&S.rolled);
+ $('#lg').innerHTML=S.log.map(x=>`<div>${x}</div>`).join('');
+ $('#card').classList.toggle('up',!!S.up);
+ if(S.card)$('#ct').textContent=S.card.t;
+}
+
+/* ---------- lobby a síť ---------- */
+const msg=t=>$('#ms').textContent=t;
+const nm=()=>$('#nm').value.trim();
+function local(){
+ mode='local';const n=+$('#cnt').value;
+ init(Array.from({length:n},(_,i)=>PN[i]));$('#lob').hidden=true;sync();
+}
+function lobbyShow(){
+ $('#ls').innerHTML=L.map((n,i)=>`<li style="color:${COL[i]}">${n}</li>`).join('');
+}
+function host(){
+ mode='host';me=0;L=[nm()||PN[0]];conns=[];
+ const code=Array.from({length:4},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.random()*32|0]).join('');
+ msg('Vytvářím hru…');
+ peer=new Peer('monopoly-'+code);
+ peer.on('error',e=>msg('Chyba sítě: '+e.type));
+ peer.on('open',()=>{$('#m0').hidden=true;$('#m1').hidden=false;$('#code').textContent=code;msg('Pošli kamarádům kód a odkaz na tuto stránku.');lobbyShow()});
+ peer.on('connection',c=>{
+  c.on('data',m=>{
+   if(m.t=='join'&&!started&&L.length<4){
+    const i=L.length;L.push(m.name||PN[i]);conns[i]=c;c.seat=i;
+    c.send({t:'seat',i});lobbyShow();conns.forEach(x=>x&&x.send({t:'lobby',L}));
+   }else if(m.t=='act'&&started)apply({...m.a,s:c.seat});
+  });
+  c.on('close',()=>{
+   if(started&&S&&c.seat!=null&&!S.p[c.seat].bk){
+    const p=S.p[c.seat];p.bk=1;S.o=S.o.map(x=>x==p.i?-1:x);log(p.n+' se odpojil - bankrot.');
+    if(S.cur==p.i){S.rolled=1;apply({t:'end',s:S.cur})}else sync();
+   }
+  });
+ });
+}
+function startHost(){
+ if(L.length<2){msg('Čekej na alespoň jednoho dalšího hráče.');return}
+ started=1;init(L);$('#lob').hidden=true;sync();
+}
+function join(){
+ const code=$('#cd').value.trim().toUpperCase();
+ if(code.length!=4){msg('Zadej čtyřmístný kód.');return}
+ mode='client';msg('Připojuji se…');
+ peer=new Peer();
+ peer.on('error',e=>msg(e.type=='peer-unavailable'?'Hra s tímto kódem nebyla nalezena.':'Chyba sítě: '+e.type));
+ peer.on('open',()=>{
+  hconn=peer.connect('monopoly-'+code);
+  hconn.on('open',()=>{hconn.send({t:'join',name:nm()});msg('Připojeno. Čekej, až hostitel spustí hru.')});
+  hconn.on('data',m=>{
+   if(m.t=='seat')me=m.i;
+   else if(m.t=='lobby'){L=m.L;$('#m0').hidden=true;$('#m1').hidden=false;$('#code').textContent=code;$('#go').hidden=true;lobbyShow()}
+   else if(m.t=='state'){S=m.s;$('#lob').hidden=true;render()}
+  });
+  hconn.on('close',()=>alert('Spojení s hostitelem bylo ukončeno.'));
+ });
+}
+</script>
+</body>
+</html>
